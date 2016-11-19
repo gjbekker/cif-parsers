@@ -4,7 +4,7 @@ PDBx/mmCIF parsers implemented in Python & JavaScript, available under the MIT l
 
 Python version usage
 --------
-```
+```python
 import cif
 data = cif.__loadCIF__("/path/to/cif/file.gz")
 ```
@@ -12,7 +12,7 @@ data = cif.__loadCIF__("/path/to/cif/file.gz")
 JavaScript version usage
 --------
 After loading cif.js and loading the data (e.g. via XHR):
-```
+```javascript
 var data = loadCIF(request.responseText, 1);
 ```
 
@@ -45,7 +45,7 @@ _pdbx_category3.field3  1.0
 ```
 
 After loading the data the `data` element is in the following format:
-```
+```json
 {
   "data_PDBID": {
     "pdbx_category1": {
