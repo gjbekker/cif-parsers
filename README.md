@@ -2,6 +2,8 @@
 
 PDBx/mmCIF parsers implemented in Python & JavaScript, available under the MIT license.
 
+The data structure used here is the same as used by the PDBx/mmJSON format, which can be downloaded via PDBj's REST services (https://pdbj.org/help/rest-interface).
+
 Python version usage
 --------
 ```python
