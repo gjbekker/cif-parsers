@@ -1,13 +1,12 @@
 #
 # cif.py
 #
-# Python CIF parser: https://github.com/gjbekker/cif-parsers
+# Python CIF parser: https://gitlab.com/pdbjapan/tools/cif-parsers
 # 
 # By Gert-Jan Bekker
 # License: MIT
-#   See https://github.com/gjbekker/cif-parsers/blob/master/LICENSE
+#   See https://gitlab.com/pdbjapan/tools/cif-parsers/blob/master/LICENSE
 #
-
 
 import gzip, os, re
 
@@ -35,11 +34,11 @@ class _loop:
   def addName(self, name):
     catName = type(name) == str and partitionString(name, ".") or ["", "", ""]
     if catName[1]:
-      if not self.parserObj.currentTarget[-2].has_key(catName[0]): self.parserObj.currentTarget[-2][catName[0]] = {}
-      if not self.parserObj.currentTarget[-2][catName[0]].has_key(catName[2]): self.parserObj.currentTarget[-2][catName[0]][catName[2]] = []
+      if not catName[0] in self.parserObj.currentTarget[-2]: self.parserObj.currentTarget[-2][catName[0]] = {}
+      if not catName[2] in self.parserObj.currentTarget[-2][catName[0]]: self.parserObj.currentTarget[-2][catName[0]][catName[2]] = []
       self.refList.append(self.parserObj.currentTarget[-2][catName[0]][catName[2]])
     else: 
-      if not self.parserObj.currentTarget[-2].has_key(catName[0]): self.parserObj.currentTarget[-2][catName[0]] = []
+      if not catName[0] in self.parserObj.currentTarget[-2]: self.parserObj.currentTarget[-2][catName[0]] = []
       self.refList.append(self.parserObj.currentTarget[-2][catName[0]])
     self.length = len(self.refList)
     
@@ -61,7 +60,7 @@ def specialSplit(content):
   quote = False
   length = len(content)
   log = ""
-  for c in xrange(length):
+  for c in range(length):
     isWS = content[c] == " " or content[c] == "\t"
     if (content[c] == "'" or content[c] == '"') and (c == 0 or content[c-1] == " " or content[c-1] == "\t" or c == length-1 or content[c+1] == " " or content[c+1] == "\t"): quote = not quote
     elif not quote and isWS and output[-1][0] != "": output.append(["", False])
@@ -136,7 +135,7 @@ class CIFparser:
     name = partitionString(name, ".")
     self.currentTarget.pop()
     if name[1]:
-      if not self.currentTarget[-1].has_key(name[0]): self.currentTarget[-1][name[0]] = {}
+      if not name[0] in self.currentTarget[-1]: self.currentTarget[-1][name[0]] = {}
       self.currentTarget[-1][name[0]][name[2]] = ""
       self.currentTarget = self.currentTarget + [targetSetter(self.currentTarget[-1][name[0]], name[2])]
     else:
@@ -150,11 +149,11 @@ class CIFparser:
   def selectGlobal(self): self.currentTarget = [self.data, self.data, None]
       
   def selectData(self, name):
-    if not self.data.has_key(name): self.data[name] = {}
+    if not name in self.data: self.data[name] = {}
     self.currentTarget = [self.data, self.data[name], None]
     
   def selectFrame(self, name=""):
-    if not self.currentTarget[1].has_key(name): self.currentTarget[1][name] = {}
+    if not name in self.currentTarget[1]: self.currentTarget[1][name] = {}
     self.currentTarget = self.currentTarget[:2] + [self.currentTarget[1][name], None]
     
   def endData(self):
@@ -184,74 +183,102 @@ def __CIFintRange__(inp):
     return (__CIFint__(inp[:pos]), __CIFint__(inp[pos+1:]))
   except: return (__CIFint__(inp),)
 
-def __loadCIFdic__(dicFile):
+def __loadCIFdic__(dicFile, force=False):
   jsfDic = dicFile[:-4]+".json"
   jsf = dicFile[:-4]+"_summary.json"
   dic = {}
-  try: dic = json.loads(open(jsf).read())
+  try: 
+    if force: throw
+    dic = json.loads(open(jsf).read())
   except:
     parser = CIFparser()
     parser.parse(open(dicFile))
     json.dump(parser.data, open(jsfDic, "w"))
-    for k,v in parser.data["data_mmcif_pdbx.dic"].iteritems():
-      if type(v) != dict or not v.has_key("item_type"): continue
+    for k,v in parser.data["data_mmcif_pdbx.dic"].items():
+      if type(v) != dict or not "item_type" in v: continue
       name = partitionString(k[6:], ".")
-      if not dic.has_key(name[0]): dic[name[0]] = {}
+      if not name[0] in dic: dic[name[0]] = {}
       dic[name[0]][name[2]] = v["item_type"]["code"][0].strip()
     json.dump(dic, open(jsf, "w"))
 
   typing = {} 
-  for k,v in dic.iteritems():
-    for k2, v2 in v.iteritems():
+  for k,v in dic.items():
+    for k2, v2 in v.items():
      if v2 == "int": 
-       if not typing.has_key(k): typing[k] = {}
+       if not k in typing: typing[k] = {}
        typing[k][k2] = __CIFint__
      elif v2 == "float":
-       if not typing.has_key(k): typing[k] = {}
+       if not k in typing: typing[k] = {}
        typing[k][k2] = __CIFfloat__
      elif v2 == "int-range": 
-       if not typing.has_key(k): typing[k] = {}
+       if not k in typing: typing[k] = {}
        typing[k][k2] = __CIFintRange__
      elif v2 == "float-range": 
-       if not typing.has_key(k): typing[k] = {}
+       if not k in typing: typing[k] = {}
        typing[k][k2] = __CIFfloatRange__
   return typing
 
 def __dumpCIF__(jso): return __dumpPart__(jso)
 
-__cifStrCheck__ = re.compile(r"[\W]")
+__cifStrCheck__ = re.compile(r"[\\s\(\)]")
+__cifStrNLCheck__ = re.compile(r"[\n]")
 
 def __dumpStr__(inp):
   if inp == None: return "?"
   else:
-    if type(inp) != str: return str(inp)
-    if re.search(__cifStrCheck__, inp) != None: return '"%s"'%inp
+    if type(inp) != str and type(inp) != unicode: return str(inp)
+    if re.search(__cifStrNLCheck__, inp) != None: return "\n;%s\n;"%inp
+    if re.search(__cifStrCheck__, inp) != None: return "'%s'"%inp
     else: return inp
     
+def __padString__(inp, flength): return inp+(" "*(flength-len(inp)))
+    
 def __dumpCat__(k, v):
-  output = ""
-  if isinstance(v, dict):
-    if len(v.values()[0]) == 1:
-      for k2 in v.keys(): output += "_%s.%s %s\n"%(k, k2, __dumpStr__(v[k2][0]))
-    else:
-      output += "loop_\n"
-      for k2 in v.keys(): output += "_%s.%s\n"%(k, k2)
-      for i in xrange(len(v.values()[0])):
-        for k2 in v.keys(): output += __dumpStr__(v[k2][i]) + " "
-        output += "\n"
-  else: output = "_%s %s\n"%(k, __dumpStr__(v))
+  output = "#\n"
+  noi = len(v[v.keys()[0]])
+  if noi == 1:
+    pad = 0
+    for k2 in v.keys():
+      if len(k2) > pad: pad = len(k2)
+    pad += 3
+    for k2 in v.keys(): output += "_%s.%s%s\n"%(k, __padString__(k2, pad), __dumpStr__(v[k2][0]))
+  else:
+    output += "loop_\n"
+    pad = []
+    for k2 in v.keys(): 
+      output += "_%s.%s\n"%(k, k2)
+      pad.append(0)
+    tmp1 = []
+    for i in range(noi):
+      tmp2 = []
+      tmp1.append(tmp2)
+      for k2 in v.keys(): tmp2.append(__dumpStr__(v[k2][i]))
+      
+    for j in range(len(tmp1[0])):
+      pad = 0
+      for i in range(len(tmp1)):
+        if tmp1[i][j][:2] != "\n;" and len(tmp1[i][j]) > pad: pad = len(tmp1[i][j])
+      pad += 1
+      for i in range(len(tmp1)):
+        if tmp1[i][0][:2] != "\n;": tmp1[i][j] = __padString__(tmp1[i][j], pad)
+    
+    for i in range(noi): output += "".join(tmp1[i])+"\n";
   
-  return output.strip()+"\n#\n"
+  return output.strip()+"\n"
+
     
 def __dumpPart__(jso):
+  inner = True
   output = ""
   for k,v in jso.items():
     if isinstance(v, dict):
       if k[:5] != "data_" and k[:5] != "save_" and k[:7] != "global_": output += __dumpCat__(k, v)
       else: 
-        output += k+"\n#\n"
+        output += k+"\n"
         output += __dumpPart__(v)
-  return output
+        inner = False
+  if inner: return output+"#\n"
+  else: return output
   
 def __loadCIFData__(data, doClean=True, doType=True):
   parser = CIFparser()
@@ -260,20 +287,20 @@ def __loadCIFData__(data, doClean=True, doType=True):
   
   if not doClean: return parser.data
   
-  for k,v in parser.data.iteritems():
-    for k2, v2 in v.iteritems():
-      for k3, v3 in v2.iteritems():
-        for i in xrange(len(v3)): v2[k3][i] = not (v3[i] == "?" or v3[i] == ".") and v3[i] or None
+  for k,v in parser.data.items():
+    for k2, v2 in v.items():
+      for k3, v3 in v2.items():
+        for i in range(len(v3)): v2[k3][i] = not (v3[i] == "?" or v3[i] == ".") and v3[i] or None
 
   if not doType or not __mmcifTyping__: return parser.data
         
-  for struct, data in parser.data.iteritems():
-    for k,v in __mmcifTyping__.iteritems():
-      if not data.has_key(k): continue
+  for struct, data in parser.data.items():
+    for k,v in __mmcifTyping__.items():
+      if not k in data: continue
       else:
-        for k2, v2 in v.iteritems(): 
-          if data[k].has_key(k2): 
-            for r in xrange(len(data[k][k2])):
+        for k2, v2 in v.items(): 
+          if k2 in data[k]: 
+            for r in range(len(data[k][k2])):
               try: data[k][k2][r] = v2(data[k][k2][r])
               except: pass
 
@@ -286,20 +313,20 @@ def __loadCIF__(cifFile, doClean=True, doType=True):
   
   if not doClean: return parser.data
   
-  for k,v in parser.data.iteritems():
-    for k2, v2 in v.iteritems():
-      for k3, v3 in v2.iteritems():
-        for i in xrange(len(v3)): v2[k3][i] = not (v3[i] == "?" or v3[i] == ".") and v3[i] or None
+  for k,v in parser.data.items():
+    for k2, v2 in v.items():
+      for k3, v3 in v2.items():
+        for i in range(len(v3)): v2[k3][i] = not (v3[i] == "?" or v3[i] == ".") and v3[i] or None
 
   if not doType or not __mmcifTyping__: return parser.data
         
-  for struct, data in parser.data.iteritems():
-    for k,v in __mmcifTyping__.iteritems():
-      if not data.has_key(k): continue
+  for struct, data in parser.data.items():
+    for k,v in __mmcifTyping__.items():
+      if not k in data: continue
       else:
-        for k2, v2 in v.iteritems(): 
-          if data[k].has_key(k2): 
-            for r in xrange(len(data[k][k2])):
+        for k2, v2 in v.items(): 
+          if k2 in data[k]: 
+            for r in range(len(data[k][k2])):
               try: data[k][k2][r] = v2(data[k][k2][r])
               except: pass
 
